@@ -1,0 +1,27 @@
+name: Update forecast snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:15 UTC daily (06:15 in German summer time, 05:15 in winter time)
+    - cron: "15 4 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python forecast.py
+      - name: Commit refreshed snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/forecast.json
+          git diff --cached --quiet || (git commit -m "Update daily forecast snapshot" && git push)
