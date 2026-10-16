@@ -8,10 +8,11 @@ import streamlit as st
 
 st.set_page_config(page_title="Wolkenmeer & Fotografie",page_icon="📷",layout="wide")
 TZ=ZoneInfo("Europe/Berlin")
-SITES={"Großer Waldstein":{"lat":50.117,"lon":11.858,"elev":877},"Kösseine":{"lat":50.012,"lon":11.982,"elev":939}}
-st.title("📷 Wolkenmeer- & Fotografie-Prognose")
-st.caption("Nebelmeer · Sonnenaufgang · Sonnenuntergang · Milchstraße · Polarlicht")
-st.warning("Prototyp: Der Nebel-Score ist eine nachvollziehbare Faustregel, keine statistisch kalibrierte Wahrscheinlichkeit. Ein hoher Score garantiert kein Wolkenmeer.")
+SITES={"Großer Waldstein":{"lat":50.117,"lon":11.858,"elev":877},"Kösseine":{"lat":50.012,"lon":11.982,"elev":939},"Kirchenlamitz":{"lat":50.151,"lon":11.946,"elev":590}}
+st.title("📷 Wolkenmeer & Astro-Fotografie")
+st.markdown("### Wetter- und Himmelsplanung auf einen Blick")
+st.caption("Großer Waldstein · Kösseine · Kirchenlamitz | Nebel · Sonnenlicht · Milchstraße · Polarlicht")
+st.warning("Die Nebel-% ist eine modellbasierte Schätzung aus Wetterindikatoren, keine vor Ort kalibrierte Trefferwahrscheinlichkeit. Sie beschreibt nebelbegünstigte Bedingungen, nicht garantiert ein Wolkenmeer oder die genaue Nebeloberkante.")
 with st.sidebar:
     sites=st.multiselect("Standorte",list(SITES),default=list(SITES))
     hours=st.selectbox("Zeitraum",["24 Stunden","48 Stunden","72 Stunden"])
@@ -67,20 +68,21 @@ def kp_data():
 if not sites: st.info("Bitte Standort auswählen.");st.stop()
 for name in sites:
     loc=SITES[name]
-    st.header(name)
+    st.divider(); st.header(f"📍 {name}")
     try: h,daily=weather(loc["lat"],loc["lon"],loc["elev"],hours)
     except Exception as e: st.error(f"Wetterdaten nicht abrufbar: {e}");continue
-    h[["Nebel-Score","Nebel-Einstufung"]]=h.apply(fog,axis=1)
+    h[["Nebelwahrscheinlichkeit (Schätzwert %) ","Nebel-Einschätzung"]]=h.apply(fog,axis=1)
     sr,ss=sunrise_sunset(loc["lat"],loc["lon"],date.today())
     c=st.columns(4);c[0].metric("Gipfelhöhe",f'{loc["elev"]} m');c[1].metric("Sonnenaufgang ca.",sr.strftime("%H:%M") if sr else "—");c[2].metric("Sonnenuntergang ca.",ss.strftime("%H:%M") if ss else "—");c[3].metric("Taupunktabstand aktuell",f'{h.iloc[0]["taupunktabstand"]:.1f} °C')
-    best=h.dropna(subset=["Nebel-Score"]).sort_values("Nebel-Score",ascending=False).head(1)
+    best=h.dropna(subset=["Nebelwahrscheinlichkeit (Schätzwert %) "]).sort_values("Nebelwahrscheinlichkeit (Schätzwert %) ",ascending=False).head(1)
     if len(best):
-        r=best.iloc[0];st.info(f'Bester Nebelindikator im Zeitraum: **{r["Nebel-Einstufung"]} – {r["Nebel-Score"]:.0f}/100** um {r["time"].strftime("%a %H:%M")}. Score basiert auf Taupunktabstand, Feuchte, tiefer Bewölkung, Gesamtbewölkung und Wind.')
+        r=best.iloc[0];st.info(f'**Höchster Nebel-Schätzwert:** {r["Nebelwahrscheinlichkeit (Schätzwert %) "]:.0f}% ({r["Nebel-Einschätzung"]}) um {r["time"].strftime("%a %H:%M")}. Berechnet aus Taupunktabstand, Feuchte, tiefer und gesamter Bewölkung sowie Wind.' )
     st.caption("Interpretation: Ein kleiner Temperatur-Taupunkt-Abstand zeigt feuchte, fast gesättigte Luft. Zusammen mit tiefer Bewölkung kann Nebel wahrscheinlicher sein. Für ein Wolkenmeer muss die Wolkenschicht unter dem Gipfel liegen – das kann diese einfache Rechnung nicht sicher erkennen.")
     st.plotly_chart(px.line(h,x="time",y=["temperature_2m","dew_point_2m"],title="Temperatur und Taupunkt",labels={"time":"Ortszeit","value":"°C","variable":"Kurve"}),use_container_width=True)
-    st.plotly_chart(px.line(h,x="time",y=["Nebel-Score","cloud_cover","cloud_cover_low"],title="Nebelindikator und Bewölkung",labels={"time":"Ortszeit","value":"Score / %","variable":"Messgröße"}),use_container_width=True)
-    view=h[["time","temperature_2m","dew_point_2m","taupunktabstand","relative_humidity_2m","cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high","visibility","wind_speed_10m","wind_gusts_10m","boundary_layer_height","precipitation_probability","Nebel-Score","Nebel-Einstufung"]].rename(columns={"time":"Zeit","temperature_2m":"Temperatur °C","dew_point_2m":"Taupunkt °C","taupunktabstand":"Temp.-Taupunkt °C","relative_humidity_2m":"Feuchte %","cloud_cover":"Bewölkung %","cloud_cover_low":"Tiefe Wolken %","cloud_cover_mid":"Mittlere Wolken %","cloud_cover_high":"Hohe Wolken %","visibility":"Sichtweite m","wind_speed_10m":"Wind km/h","wind_gusts_10m":"Böen km/h","boundary_layer_height":"Grenzschichthöhe m","precipitation_probability":"Niederschlagschance %"})
-    st.subheader("Stündliche Fotografie-Daten");st.dataframe(view,use_container_width=True,hide_index=True)
+    st.plotly_chart(px.line(h,x="time",y=["Nebelwahrscheinlichkeit (Schätzwert %) ","cloud_cover","cloud_cover_low"],title="Geschätzte Nebelwahrscheinlichkeit und Bewölkung",labels={"time":"Ortszeit","value":"Score / %","variable":"Messgröße"}),use_container_width=True)
+    view=h[["time","temperature_2m","dew_point_2m","taupunktabstand","relative_humidity_2m","cloud_cover","cloud_cover_low","cloud_cover_mid","cloud_cover_high","visibility","wind_speed_10m","wind_gusts_10m","boundary_layer_height","precipitation_probability","Nebelwahrscheinlichkeit (Schätzwert %) ","Nebel-Einschätzung"]].rename(columns={"time":"Zeit","temperature_2m":"Temperatur °C","dew_point_2m":"Taupunkt °C","taupunktabstand":"Temp.-Taupunkt °C","relative_humidity_2m":"Feuchte %","cloud_cover":"Bewölkung %","cloud_cover_low":"Tiefe Wolken %","cloud_cover_mid":"Mittlere Wolken %","cloud_cover_high":"Hohe Wolken %","visibility":"Sichtweite m","wind_speed_10m":"Wind km/h","wind_gusts_10m":"Böen km/h","boundary_layer_height":"Grenzschichthöhe m","precipitation_probability":"Niederschlagschance %"})
+    st.subheader("Stündliche Fotografie-Daten")
+    st.dataframe(view,use_container_width=True,hide_index=True)
     st.subheader("Milchstraße / Nachtfotografie")
     night=h[h["is_day"]==0]
     if len(night):
@@ -89,10 +91,10 @@ for name in sites:
     st.caption("Für Milchstraßenfotos zusätzlich Mondphase/-stand, astronomische Dunkelheit und Lichtverschmutzung prüfen. Diese Version berechnet noch keine exakte Sichtbarkeit des galaktischen Zentrums.")
     st.subheader("Tägliche Sonnen- und Lichtdaten");st.dataframe(daily,use_container_width=True,hide_index=True)
 
-st.header("🌌 Polarlicht-Monitor (NOAA)")
+st.divider(); st.header("🌌 Polarlicht-Monitor für Kirchenlamitz / Fichtelgebirge")
 kp=kp_data()
 if kp.empty: st.warning("NOAA-Kp-Daten momentan nicht erreichbar.")
 else:
     last=kp.iloc[-1];a,b=st.columns(2);a.metric("Letzter Kp-Wert",f'{last["Kp"]:.1f}');b.metric("Einordnung","Geomagnetischer Sturm möglich" if last["Kp"]>=5 else "In Nordbayern meist geringe Chance")
     st.dataframe(kp,use_container_width=True,hide_index=True)
-st.caption("Kp ist kein direkter Polarlichtnachweis. Für Nordbayern braucht es starke geomagnetische Aktivität, klare Wolkenlücken und einen freien Nordhorizont. Open-Meteo-/NOAA-Daten und Nutzungsbedingungen beachten.")
+st.caption("Polarlicht-Chance in % wäre ohne lokale Sichtungsdaten, Echtzeit-Sonnenwind und Wolken-/Horizontmodell irreführend. Der Kp-Wert ist deshalb ein Aktivitätsindikator, kein lokaler Prozentwert. Für Kirchenlamitz: Wolkenlücken, Dunkelheit und freier Nordhorizont prüfen.")
